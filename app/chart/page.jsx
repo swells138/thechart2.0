@@ -5,40 +5,9 @@ import { useEffect, useState } from "react";
 import ChartClient from "./ChartClient";
 import { supabase } from "@/lib/supabaseClient";
 
-type GraphNode = {
-  id: string;
-  name: string;
-  group: string;
-};
+const EMPTY_CHART_DATA = { nodes: [], links: [] };
 
-type GraphLink = {
-  source: string;
-  target: string;
-  type: string;
-};
-
-type ChartData = {
-  nodes: GraphNode[];
-  links: GraphLink[];
-};
-
-const EMPTY_CHART_DATA: ChartData = { nodes: [], links: [] };
-
-type NodeRow = {
-  id?: string | number | null;
-  name?: string | null;
-  group?: string | null;
-  group_type?: string | null;
-};
-
-type LinkRow = {
-  source?: string | number | null;
-  target?: string | number | null;
-  type?: string | null;
-  relationship_type?: string | null;
-};
-
-function normalizeString(value: string | number | null | undefined): string | null {
+function normalizeString(value) {
   if (typeof value === "string") {
     const trimmed = value.trim();
     return trimmed ? trimmed : null;
@@ -52,7 +21,7 @@ function normalizeString(value: string | number | null | undefined): string | nu
 }
 
 export default function ChartPage() {
-  const [chartData, setChartData] = useState<ChartData>(EMPTY_CHART_DATA);
+  const [chartData, setChartData] = useState(EMPTY_CHART_DATA);
 
   useEffect(() => {
     let isActive = true;
@@ -76,7 +45,7 @@ export default function ChartPage() {
           return;
         }
 
-        const typedNodeRows = (nodeRows as NodeRow[] | null | undefined) ?? [];
+        const typedNodeRows = Array.isArray(nodeRows) ? nodeRows : [];
         const nodes = typedNodeRows
           .map((row) => {
             const id = normalizeString(row?.id) ?? normalizeString(row?.name);
@@ -91,11 +60,11 @@ export default function ChartPage() {
               id,
               name,
               group,
-            } satisfies GraphNode;
+            };
           })
-          .filter((node): node is GraphNode => Boolean(node));
+          .filter(Boolean);
 
-        const typedLinkRows = (linkRows as LinkRow[] | null | undefined) ?? [];
+        const typedLinkRows = Array.isArray(linkRows) ? linkRows : [];
         const links = typedLinkRows
           .map((row) => {
             const source = normalizeString(row?.source);
@@ -110,9 +79,9 @@ export default function ChartPage() {
               source,
               target,
               type,
-            } satisfies GraphLink;
+            };
           })
-          .filter((link): link is GraphLink => Boolean(link));
+          .filter(Boolean);
 
         setChartData({ nodes, links });
       } catch (error) {
