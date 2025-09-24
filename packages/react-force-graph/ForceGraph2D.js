@@ -291,7 +291,7 @@ export function ForceGraph2D({
                   fill="#cbd5f5"
                   pointerEvents="none"
                 >
-                  {node.id}
+                  {node.name ?? node.id}
                 </text>
               </g>
             );
