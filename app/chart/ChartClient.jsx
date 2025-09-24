@@ -1,9 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-
-const DEFAULT_WIDTH = 900;
-const DEFAULT_HEIGHT = 540;
+import { useEffect, useMemo, useState } from "react";
+import { ForceGraph2D } from "react-force-graph";
 
 const groupColors = {
   friend: "#38bdf8",
@@ -17,6 +15,10 @@ function getGroupColor(group) {
   return groupColors[group] ?? "#818cf8";
 }
 
+function makeTypeLabel(value) {
+  return value.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export default function ChartClient({ data }) {
   const processedLinks = useMemo(
     () =>
@@ -25,6 +27,19 @@ export default function ChartClient({ data }) {
         id: `${link.source}|${link.target}|${link.type}|${index}`,
       })),
     [data.links],
+  );
+
+  const graphNodes = useMemo(
+    () => data.nodes.map((node) => ({ ...node, color: getGroupColor(node.group) })),
+    [data.nodes],
+  );
+
+  const graphData = useMemo(
+    () => ({
+      nodes: graphNodes,
+      links: processedLinks.map((link) => ({ ...link })),
+    }),
+    [graphNodes, processedLinks],
   );
 
   const relationshipTypes = useMemo(() => {
@@ -60,158 +75,12 @@ export default function ChartClient({ data }) {
     return map;
   }, [processedLinks]);
 
-  const simulationNodesRef = useRef([]);
-  const linksRef = useRef([]);
-  const focusNodeIdRef = useRef(null);
-  const focusFrameRef = useRef(0);
-
-  const [renderNodes, setRenderNodes] = useState([]);
   const [filterType, setFilterType] = useState("all");
   const [selectedNodeId, setSelectedNodeId] = useState(null);
   const [hoverNodeId, setHoverNodeId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [searchMessage, setSearchMessage] = useState("");
-
-  const containerRef = useRef(null);
-  const [dimensions, setDimensions] = useState({
-    width: DEFAULT_WIDTH,
-    height: DEFAULT_HEIGHT,
-  });
-
-  useEffect(() => {
-    const nodes = data.nodes.map((node, index, arr) => {
-      const angle = (index / Math.max(arr.length, 1)) * Math.PI * 2;
-      return {
-        ...node,
-        x: DEFAULT_WIDTH / 2 + Math.cos(angle) * 180,
-        y: DEFAULT_HEIGHT / 2 + Math.sin(angle) * 180,
-        vx: 0,
-        vy: 0,
-      };
-    });
-
-    simulationNodesRef.current = nodes;
-    const nodeById = new Map(nodes.map((node) => [node.id, node]));
-    linksRef.current = processedLinks.map((link) => ({
-      ...link,
-      source: nodeById.get(link.source) ?? null,
-      target: nodeById.get(link.target) ?? null,
-    }));
-
-    setRenderNodes(nodes.map((node) => ({ ...node })));
-  }, [data.nodes, processedLinks]);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const { width, height } = entry.contentRect;
-        setDimensions((current) => ({
-          width: width || current.width,
-          height: Math.max(height, DEFAULT_HEIGHT),
-        }));
-      }
-    });
-
-    observer.observe(containerRef.current);
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    if (!simulationNodesRef.current.length) {
-      return undefined;
-    }
-
-    let animationFrame;
-
-    const step = () => {
-      const nodes = simulationNodesRef.current;
-      const links = linksRef.current;
-      const width = dimensions.width || DEFAULT_WIDTH;
-      const height = dimensions.height || DEFAULT_HEIGHT;
-
-      const chargeStrength = 1600;
-      const springLength = 140;
-      const springStiffness = 0.02;
-      const centerStrength = 0.005;
-      const damping = 0.9;
-      const timeStep = 0.02;
-      const maxSpeed = 6;
-
-      for (let i = 0; i < nodes.length; i += 1) {
-        const node = nodes[i];
-        for (let j = i + 1; j < nodes.length; j += 1) {
-          const other = nodes[j];
-          let dx = node.x - other.x;
-          let dy = node.y - other.y;
-          const distSq = dx * dx + dy * dy || 0.001;
-          const distance = Math.sqrt(distSq);
-          const force = chargeStrength / distSq;
-          const fx = (dx / distance) * force;
-          const fy = (dy / distance) * force;
-          node.vx += fx;
-          node.vy += fy;
-          other.vx -= fx;
-          other.vy -= fy;
-        }
-      }
-
-      for (const link of links) {
-        const source = link.source;
-        const target = link.target;
-        if (!source || !target) continue;
-        let dx = target.x - source.x;
-        let dy = target.y - source.y;
-        const distance = Math.sqrt(dx * dx + dy * dy) || 0.001;
-        const displacement = distance - springLength;
-        const force = displacement * springStiffness;
-        const fx = (dx / distance) * force;
-        const fy = (dy / distance) * force;
-        source.vx += fx;
-        source.vy += fy;
-        target.vx -= fx;
-        target.vy -= fy;
-      }
-
-      if (focusFrameRef.current > 0 && focusNodeIdRef.current) {
-        const focusNode = nodes.find((node) => node.id === focusNodeIdRef.current);
-        if (focusNode) {
-          const focusStrength = 0.08;
-          focusNode.vx += (width / 2 - focusNode.x) * focusStrength;
-          focusNode.vy += (height / 2 - focusNode.y) * focusStrength;
-        }
-        focusFrameRef.current -= 1;
-      } else {
-        focusNodeIdRef.current = null;
-      }
-
-      for (const node of nodes) {
-        node.vx += (width / 2 - node.x) * centerStrength;
-        node.vy += (height / 2 - node.y) * centerStrength;
-
-        node.vx *= damping;
-        node.vy *= damping;
-
-        node.vx = Math.max(Math.min(node.vx, maxSpeed), -maxSpeed);
-        node.vy = Math.max(Math.min(node.vy, maxSpeed), -maxSpeed);
-
-        node.x += node.vx * timeStep * 60;
-        node.y += node.vy * timeStep * 60;
-
-        const margin = 24;
-        node.x = Math.min(Math.max(node.x, margin), width - margin);
-        node.y = Math.min(Math.max(node.y, margin), height - margin);
-      }
-
-      setRenderNodes(nodes.map((node) => ({ ...node })));
-      animationFrame = requestAnimationFrame(step);
-    };
-
-    animationFrame = requestAnimationFrame(step);
-
-    return () => cancelAnimationFrame(animationFrame);
-  }, [dimensions.height, dimensions.width, processedLinks.length]);
+  const [focusCommand, setFocusCommand] = useState(null);
 
   useEffect(() => {
     if (!searchMessage) return undefined;
@@ -219,17 +88,20 @@ export default function ChartClient({ data }) {
     return () => clearTimeout(timeout);
   }, [searchMessage]);
 
+  const filterLinks = useMemo(
+    () => processedLinks.filter((link) => filterType === "all" || link.type === filterType),
+    [processedLinks, filterType],
+  );
+
   const visibleNodeIds = useMemo(() => {
     if (filterType === "all") return null;
     const ids = new Set();
-    processedLinks.forEach((link) => {
-      if (link.type === filterType) {
-        ids.add(link.source);
-        ids.add(link.target);
-      }
+    filterLinks.forEach((link) => {
+      ids.add(link.source);
+      ids.add(link.target);
     });
     return ids;
-  }, [processedLinks, filterType]);
+  }, [filterType, filterLinks]);
 
   useEffect(() => {
     if (filterType === "all" || !selectedNodeId || !visibleNodeIds) return;
@@ -245,12 +117,6 @@ export default function ChartClient({ data }) {
     }
   }, [filterType, hoverNodeId, visibleNodeIds]);
 
-  const linkById = useMemo(() => {
-    const map = new Map();
-    processedLinks.forEach((link) => map.set(link.id, link));
-    return map;
-  }, [processedLinks]);
-
   const highlightInfo = useMemo(() => {
     const nodeIds = new Set();
     const linkIds = new Set();
@@ -260,9 +126,7 @@ export default function ChartClient({ data }) {
       nodeIds.add(nodeId);
       const connections = adjacencyMap.get(nodeId) ?? [];
       connections.forEach((connection) => {
-        const link = linkById.get(connection.linkId);
-        if (!link) return;
-        if (filterType !== "all" && link.type !== filterType) return;
+        if (filterType !== "all" && connection.type !== filterType) return;
         nodeIds.add(connection.nodeId);
         linkIds.add(connection.linkId);
       });
@@ -274,15 +138,7 @@ export default function ChartClient({ data }) {
     }
 
     return { nodeIds, linkIds };
-  }, [adjacencyMap, filterType, hoverNodeId, linkById, selectedNodeId]);
-
-  const nodePositions = useMemo(() => {
-    const map = new Map();
-    renderNodes.forEach((node) => {
-      map.set(node.id, node);
-    });
-    return map;
-  }, [renderNodes]);
+  }, [adjacencyMap, filterType, hoverNodeId, selectedNodeId]);
 
   const selectedNodeDetails = useMemo(
     () => data.nodes.find((node) => node.id === selectedNodeId) ?? null,
@@ -299,12 +155,13 @@ export default function ChartClient({ data }) {
     const items = adjacencyMap.get(selectedNodeId) ?? [];
     const unique = new Map();
     items.forEach((item) => {
+      if (filterType !== "all" && item.type !== filterType) return;
       if (!unique.has(item.linkId)) {
         unique.set(item.linkId, item);
       }
     });
     return Array.from(unique.values());
-  }, [adjacencyMap, selectedNodeId]);
+  }, [adjacencyMap, filterType, selectedNodeId]);
 
   const handleSearchSubmit = (event) => {
     event.preventDefault();
@@ -314,9 +171,7 @@ export default function ChartClient({ data }) {
       return;
     }
 
-    const match = data.nodes.find(
-      (node) => node.id.toLowerCase() === term.toLowerCase(),
-    );
+    const match = data.nodes.find((node) => node.id.toLowerCase() === term.toLowerCase());
 
     if (!match) {
       setSearchMessage(`No person named "${term}" found.`);
@@ -330,15 +185,8 @@ export default function ChartClient({ data }) {
     }
 
     setSelectedNodeId(match.id);
-    focusNodeIdRef.current = match.id;
-    focusFrameRef.current = 120;
+    setFocusCommand({ nodeId: match.id, timestamp: Date.now() });
   };
-
-  const filterLinks = processedLinks.filter(
-    (link) => filterType === "all" || link.type === filterType,
-  );
-
-  const makeTypeLabel = (value) => value.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
   return (
     <div className="flex flex-col gap-6 lg:flex-row">
@@ -387,87 +235,23 @@ export default function ChartClient({ data }) {
             {searchMessage}
           </div>
         ) : null}
-        <div ref={containerRef} className="mt-4 min-h-[540px] w-full">
-          <svg
-            width={dimensions.width}
-            height={dimensions.height}
-            className="h-full w-full"
-            onMouseLeave={() => setHoverNodeId(null)}
-          >
-            <defs>
-              <radialGradient id="nodeGlow" cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stopColor="#facc15" stopOpacity="0.9" />
-                <stop offset="100%" stopColor="#facc15" stopOpacity="0" />
-              </radialGradient>
-            </defs>
-            <g className="links">
-              {filterLinks.map((link) => {
-                const source = nodePositions.get(link.source);
-                const target = nodePositions.get(link.target);
-                if (!source || !target) return null;
-                const highlighted = highlightInfo.linkIds.has(link.id);
-                const stroke = highlighted ? "#facc15" : "#475569";
-                const opacity = highlighted ? 0.95 : 0.5;
-                const width = highlighted ? 2.4 : 1.1;
-                return (
-                  <line
-                    key={link.id}
-                    x1={source.x}
-                    y1={source.y}
-                    x2={target.x}
-                    y2={target.y}
-                    stroke={stroke}
-                    strokeOpacity={opacity}
-                    strokeWidth={width}
-                  />
-                );
-              })}
-            </g>
-            <g className="nodes">
-              {renderNodes
-                .filter((node) => !visibleNodeIds || visibleNodeIds.has(node.id))
-                .map((node) => {
-                  const highlighted = highlightInfo.nodeIds.has(node.id);
-                  const radius = highlighted ? 9 : 6;
-                  const fill = getGroupColor(node.group);
-                  const stroke = highlighted ? "url(#nodeGlow)" : "#0f172a";
-                  return (
-                    <g
-                      key={node.id}
-                      className="cursor-pointer"
-                      onMouseEnter={() => setHoverNodeId(node.id)}
-                      onMouseLeave={() => setHoverNodeId(null)}
-                      onClick={() => {
-                        setSelectedNodeId(node.id);
-                        setSearchMessage("");
-                        focusNodeIdRef.current = node.id;
-                        focusFrameRef.current = 90;
-                      }}
-                    >
-                      <circle
-                        cx={node.x}
-                        cy={node.y}
-                        r={radius}
-                        fill={fill}
-                        stroke={stroke}
-                        strokeWidth={highlighted ? 2 : 1}
-                        opacity={highlighted ? 1 : 0.9}
-                      />
-                      <text
-                        x={node.x + radius + 4}
-                        y={node.y + 4}
-                        fontSize={12}
-                        fill="#cbd5f5"
-                        pointerEvents="none"
-                      >
-                        {node.id}
-                      </text>
-                    </g>
-                  );
-                })}
-            </g>
-          </svg>
-        </div>
+        <ForceGraph2D
+          className="mt-4 min-h-[540px] w-full"
+          graphData={graphData}
+          filterLinks={filterLinks}
+          visibleNodeIds={visibleNodeIds}
+          highlightNodeIds={highlightInfo.nodeIds}
+          highlightLinkIds={highlightInfo.linkIds}
+          focusCommand={focusCommand}
+          onNodeHover={(id) => setHoverNodeId(id)}
+          onNodeClick={(id) => {
+            setSelectedNodeId(id);
+            setSearchMessage("");
+            setFocusCommand({ nodeId: id, timestamp: Date.now() });
+          }}
+          onBackgroundClick={() => setHoverNodeId(null)}
+          backgroundColor="transparent"
+        />
       </div>
       <aside className="glass-panel w-full max-w-lg space-y-4 p-6 lg:w-80">
         {selectedNodeId ? (
@@ -479,9 +263,7 @@ export default function ChartClient({ data }) {
               </p>
             </div>
             <div>
-              <h3 className="text-xs uppercase tracking-wide text-slate-400">
-                Relationship types
-              </h3>
+              <h3 className="text-xs uppercase tracking-wide text-slate-400">Relationship types</h3>
               {selectedRelationships.length ? (
                 <div className="mt-3 flex flex-wrap gap-2">
                   {selectedRelationships.map((type) => (
@@ -522,8 +304,7 @@ export default function ChartClient({ data }) {
           <div className="space-y-3 text-sm text-slate-400">
             <p>Select a person in the chart to view their relationships and connections.</p>
             <p>
-              Tip: use the filter to focus on a relationship type or the search bar to jump directly to
-              someone.
+              Tip: use the filter to focus on a relationship type or the search bar to jump directly to someone.
             </p>
           </div>
         )}

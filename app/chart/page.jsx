@@ -1,20 +1,12 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { redirect } from "next/navigation";
 import ChartClient from "./ChartClient";
-import { getSession } from "@/lib/session";
 
 export const metadata = {
   title: "Relationship Chart | The Chart 2.0",
 };
 
 export default async function ChartPage() {
-  const session = getSession();
-
-  if (!session) {
-    redirect("/login");
-  }
-
   const filePath = path.join(process.cwd(), "data", "chart.json");
   const file = await fs.readFile(filePath, "utf-8");
   const chartData = JSON.parse(file);
