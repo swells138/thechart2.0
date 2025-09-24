@@ -1,0 +1,19 @@
+{
+  "nodes": [
+    { "id": "Alice", "group": "friend" },
+    { "id": "Dana", "group": "ex" },
+    { "id": "Shane", "group": "dating" },
+    { "id": "Morgan", "group": "friend" },
+    { "id": "Kai", "group": "colleague" },
+    { "id": "Riley", "group": "family" }
+  ],
+  "links": [
+    { "source": "Alice", "target": "Dana", "type": "ex" },
+    { "source": "Shane", "target": "Dana", "type": "dating" },
+    { "source": "Alice", "target": "Morgan", "type": "friend" },
+    { "source": "Morgan", "target": "Kai", "type": "friend" },
+    { "source": "Kai", "target": "Dana", "type": "colleague" },
+    { "source": "Riley", "target": "Alice", "type": "family" },
+    { "source": "Riley", "target": "Dana", "type": "family" }
+  ]
+}
