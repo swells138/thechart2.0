@@ -171,7 +171,18 @@ export default function ChartClient({ data }) {
       return;
     }
 
-    const match = data.nodes.find((node) => node.id.toLowerCase() === term.toLowerCase());
+    const termLower = term.toLowerCase();
+    const match = data.nodes.find((node) => {
+      if (typeof node.id === "string" && node.id.toLowerCase() === termLower) {
+        return true;
+      }
+
+      if (typeof node.name === "string" && node.name.toLowerCase() === termLower) {
+        return true;
+      }
+
+      return false;
+    });
 
     if (!match) {
       setSearchMessage(`No person named "${term}" found.`);
@@ -257,7 +268,9 @@ export default function ChartClient({ data }) {
         {selectedNodeId ? (
           <div className="space-y-5">
             <div>
-              <h2 className="text-xl font-semibold text-slate-100">{selectedNodeId}</h2>
+              <h2 className="text-xl font-semibold text-slate-100">
+                {selectedNodeDetails?.name ?? selectedNodeId}
+              </h2>
               <p className="text-sm text-slate-400">
                 Group: {makeTypeLabel(selectedNodeDetails?.group ?? "unassigned")}
               </p>
