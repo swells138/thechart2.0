@@ -7,6 +7,107 @@ import ChartClient from "../chart/ChartClient";
 import { buildChartData, EMPTY_CHART_DATA } from "@/lib/chartData";
 import { supabase } from "@/lib/supabaseClient";
 
+const LOCAL_STORAGE_KEY = "my-chart-data";
+
+function generateLocalNodeId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `local-${crypto.randomUUID()}`;
+  }
+
+  return `local-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function persistChartDataLocally(data) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    const nodes = Array.isArray(data?.nodes)
+      ? data.nodes
+          .map((node) => {
+            const id = typeof node?.id === "string" ? node.id : null;
+            const name = typeof node?.name === "string" ? node.name : id;
+            const group = typeof node?.group === "string" ? node.group : null;
+            if (!id || !name || !group) {
+              return null;
+            }
+
+            return { id, name, group };
+          })
+          .filter(Boolean)
+      : [];
+
+    const links = Array.isArray(data?.links)
+      ? data.links
+          .map((link) => {
+            const source = typeof link?.source === "string" ? link.source : null;
+            const target = typeof link?.target === "string" ? link.target : null;
+            const type = typeof link?.type === "string" ? link.type : null;
+            if (!source || !target || !type) {
+              return null;
+            }
+
+            return { source, target, type };
+          })
+          .filter(Boolean)
+      : [];
+
+    window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ nodes, links }));
+  } catch (storageError) {
+    console.warn("Unable to persist chart data locally:", storageError);
+  }
+}
+
+function readLocalChartData() {
+  if (typeof window === "undefined") {
+    return EMPTY_CHART_DATA;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (!raw) {
+      return EMPTY_CHART_DATA;
+    }
+
+    const parsed = JSON.parse(raw);
+    const nodes = Array.isArray(parsed?.nodes)
+      ? parsed.nodes
+          .map((node) => {
+            const id = typeof node?.id === "string" ? node.id : null;
+            const name = typeof node?.name === "string" ? node.name : id;
+            const group = typeof node?.group === "string" ? node.group : null;
+            if (!id || !name || !group) {
+              return null;
+            }
+
+            return { id, name, group };
+          })
+          .filter(Boolean)
+      : [];
+
+    const links = Array.isArray(parsed?.links)
+      ? parsed.links
+          .map((link) => {
+            const source = typeof link?.source === "string" ? link.source : null;
+            const target = typeof link?.target === "string" ? link.target : null;
+            const type = typeof link?.type === "string" ? link.type : null;
+            if (!source || !target || !type) {
+              return null;
+            }
+
+            return { source, target, type };
+          })
+          .filter(Boolean)
+      : [];
+
+    return { nodes, links };
+  } catch (storageError) {
+    console.warn("Unable to read chart data from local storage:", storageError);
+    return EMPTY_CHART_DATA;
+  }
+}
+
 export default function MyChartPage() {
   const router = useRouter();
   const isMountedRef = useRef(true);
@@ -16,6 +117,8 @@ export default function MyChartPage() {
   const [formValues, setFormValues] = useState({ name: "", group: "friend" });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formFeedback, setFormFeedback] = useState({ type: null, message: "" });
+  const [isUsingLocalData, setIsUsingLocalData] = useState(false);
+  const [fallbackNotice, setFallbackNotice] = useState("");
 
   useEffect(() => {
     return () => {
@@ -23,10 +126,33 @@ export default function MyChartPage() {
     };
   }, []);
 
+  const loadChartFromLocalStorage = useCallback(() => {
+    if (!isMountedRef.current) {
+      return false;
+    }
+
+    const stored = readLocalChartData();
+    const hasStoredData = stored.nodes.length > 0 || stored.links.length > 0;
+
+    setChartData(hasStoredData ? stored : EMPTY_CHART_DATA);
+    setStatus({
+      loading: false,
+      error: hasStoredData ? null : "We couldn’t load your chart right now. Please try again.",
+    });
+    setIsUsingLocalData(hasStoredData);
+    setFallbackNotice(
+      hasStoredData
+        ? "You're viewing your saved offline chart. Changes will sync when we reconnect."
+        : ""
+    );
+
+    return hasStoredData;
+  }, []);
+
   const loadChartForUser = useCallback(
     async (userId) => {
       if (!userId || !isMountedRef.current) {
-        return;
+        return false;
       }
 
       setStatus({ loading: true, error: null });
@@ -51,25 +177,31 @@ export default function MyChartPage() {
         }
 
         if (!isMountedRef.current) {
-          return;
+          return true;
         }
 
-        setChartData(buildChartData(nodeRows ?? [], linkRows ?? []));
+        const nextData = buildChartData(nodeRows ?? [], linkRows ?? []);
+        setChartData(nextData);
         setStatus({ loading: false, error: null });
+        setIsUsingLocalData(false);
+        setFallbackNotice("");
+        persistChartDataLocally(nextData);
+        return true;
       } catch (error) {
         console.error("Unexpected error fetching user chart data from Supabase:", error);
         if (!isMountedRef.current) {
-          return;
+          return false;
         }
 
-        setChartData(EMPTY_CHART_DATA);
-        setStatus({
-          loading: false,
-          error: "We couldn’t load your chart right now. Please try again.",
-        });
+        const hasStoredData = loadChartFromLocalStorage();
+        if (!hasStoredData) {
+          setIsUsingLocalData(false);
+          setFallbackNotice("");
+        }
+        return hasStoredData;
       }
     },
-    []
+    [loadChartFromLocalStorage]
   );
 
   useEffect(() => {
@@ -82,7 +214,10 @@ export default function MyChartPage() {
 
         const user = data?.user ?? null;
         if (!user) {
-          router.replace("/login");
+          const hasStoredData = loadChartFromLocalStorage();
+          if (!hasStoredData) {
+            router.replace("/login");
+          }
           return;
         }
 
@@ -93,7 +228,7 @@ export default function MyChartPage() {
         await loadChartForUser(user.id);
       } catch (error) {
         console.error("Unexpected error while initializing my chart page:", error);
-        if (isMountedRef.current) {
+        if (!loadChartFromLocalStorage() && isMountedRef.current) {
           setStatus({
             loading: false,
             error: "We couldn’t load your chart right now. Please try again.",
@@ -109,9 +244,12 @@ export default function MyChartPage() {
 
       const authUser = session?.user ?? null;
       if (!authUser) {
-        setChartData(EMPTY_CHART_DATA);
-        setStatus({ loading: true, error: null });
-        router.replace("/login");
+        const hasStoredData = loadChartFromLocalStorage();
+        if (!hasStoredData) {
+          setChartData(EMPTY_CHART_DATA);
+          setStatus({ loading: true, error: null });
+          router.replace("/login");
+        }
         return;
       }
 
@@ -122,7 +260,7 @@ export default function MyChartPage() {
     return () => {
       authListener?.subscription?.unsubscribe();
     };
-  }, [loadChartForUser, router]);
+  }, [loadChartForUser, loadChartFromLocalStorage, router]);
 
   const handleInputChange = (event) => {
     const { name, value } = event.target;
@@ -133,6 +271,7 @@ export default function MyChartPage() {
     event.preventDefault();
 
     const trimmedName = formValues.name.trim();
+    const normalizedName = trimmedName.toLowerCase();
     if (!trimmedName) {
       setFormFeedback({
         type: "error",
@@ -141,7 +280,7 @@ export default function MyChartPage() {
       return;
     }
 
-    if (!currentUserId) {
+    if (!isUsingLocalData && !currentUserId) {
       setFormFeedback({
         type: "error",
         message: "We couldn’t verify your account. Please reload and try again.",
@@ -149,10 +288,54 @@ export default function MyChartPage() {
       return;
     }
 
+    if (chartData.nodes.some((node) => node.name?.toLowerCase() === normalizedName)) {
+      setFormFeedback({
+        type: "error",
+        message: `${trimmedName} is already on your chart.`,
+      });
+      return;
+    }
+
     setIsSubmitting(true);
     setFormFeedback({ type: null, message: "" });
 
+    const addLocally = (messageSuffix = "") => {
+      if (!isMountedRef.current) {
+        return;
+      }
+
+      setChartData((prev) => {
+        const newNode = {
+          id: generateLocalNodeId(),
+          name: trimmedName,
+          group: formValues.group,
+        };
+        const updated = {
+          nodes: [...prev.nodes, newNode],
+          links: prev.links,
+        };
+
+        persistChartDataLocally(updated);
+        return updated;
+      });
+
+      setIsUsingLocalData(true);
+      setFallbackNotice(
+        "You're working offline. We'll sync your changes once we're back online."
+      );
+      setFormValues({ name: "", group: "friend" });
+      setFormFeedback({
+        type: "success",
+        message: `${trimmedName} has been added to your chart.${messageSuffix}`,
+      });
+    };
+
     try {
+      if (isUsingLocalData) {
+        addLocally();
+        return;
+      }
+
       const { data: privateNode, error: privateNodeError } = await supabase
         .from("nodes")
         .insert([
@@ -198,22 +381,23 @@ export default function MyChartPage() {
         throw linkError;
       }
 
-      await loadChartForUser(currentUserId);
+      const loadedFromSupabase = await loadChartForUser(currentUserId);
 
-      if (isMountedRef.current) {
+      if (isMountedRef.current && loadedFromSupabase) {
         setFormValues({ name: "", group: "friend" });
         setFormFeedback({
           type: "success",
           message: `${trimmedName} has been added to your chart.`,
         });
       }
+
+      if (isMountedRef.current && !loadedFromSupabase) {
+        addLocally(" We'll show it here until the live data is available.");
+      }
     } catch (error) {
       console.error("Error adding person to chart:", error);
       if (isMountedRef.current) {
-        setFormFeedback({
-          type: "error",
-          message: "We couldn’t add that person right now. Please try again.",
-        });
+        addLocally(" We'll sync this once we reconnect.");
       }
     } finally {
       if (isMountedRef.current) {
@@ -285,6 +469,12 @@ export default function MyChartPage() {
           </div>
         ) : null}
       </div>
+
+      {fallbackNotice ? (
+        <div className="rounded-xl border border-sky-500/40 bg-sky-500/10 px-4 py-3 text-sm text-sky-200">
+          {fallbackNotice}
+        </div>
+      ) : null}
 
       {status.error ? (
         <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
