@@ -36,6 +36,12 @@ export default function HomePage() {
         >
           Log in instead
         </Link>
+        <Link
+          href="/chart"
+          className="rounded-xl border border-slate-800 px-6 py-3 text-base font-medium text-slate-200 transition hover:bg-slate-900"
+        >
+          View the public chart
+        </Link>
       </div>
       <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 text-left shadow-lg">
         <h2 className="text-lg font-medium text-slate-200">Why The Chart 2.0?</h2>
