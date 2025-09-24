@@ -1,15 +1,14 @@
-import fs from "node:fs/promises";
-import path from "node:path";
 import ChartClient from "./ChartClient";
+import { getChartData } from "@/lib/supabase";
 
 export const metadata = {
   title: "Relationship Chart | The Chart 2.0",
 };
 
+export const revalidate = 0;
+
 export default async function ChartPage() {
-  const filePath = path.join(process.cwd(), "data", "chart.json");
-  const file = await fs.readFile(filePath, "utf-8");
-  const chartData = JSON.parse(file);
+  const chartData = await getChartData();
 
   return (
     <div className="space-y-6">
