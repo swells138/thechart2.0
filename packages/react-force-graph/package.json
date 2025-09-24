@@ -1,0 +1,9 @@
+{
+  "name": "react-force-graph",
+  "version": "0.0.0-local",
+  "type": "module",
+  "exports": {
+    "./ForceGraph2D": "./ForceGraph2D.js",
+    ".": "./index.js"
+  }
+}
