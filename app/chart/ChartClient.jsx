@@ -42,6 +42,15 @@ export default function ChartClient({ data }) {
     [graphNodes, processedLinks],
   );
 
+  const graphSignature = JSON.stringify({
+    nodes: Array.isArray(data?.nodes)
+      ? data.nodes.map((node) => [node.id ?? "", node.name ?? "", node.group ?? ""])
+      : [],
+    links: Array.isArray(data?.links)
+      ? data.links.map((link) => [link.source ?? "", link.target ?? "", link.type ?? ""])
+      : [],
+  });
+
   const relationshipTypes = useMemo(() => {
     const unique = Array.from(new Set(processedLinks.map((link) => link.type)));
     return ["all", ...unique];
@@ -247,6 +256,7 @@ export default function ChartClient({ data }) {
           </div>
         ) : null}
         <ForceGraph2D
+          key={graphSignature}
           className="mt-4 min-h-[540px] w-full"
           graphData={graphData}
           filterLinks={filterLinks}
