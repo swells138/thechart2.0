@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { getSession } from "@/lib/session";
+
 import LoginForm from "./LoginForm";
 
 export const metadata = {
@@ -8,11 +7,6 @@ export const metadata = {
 };
 
 export default function LoginPage() {
-  const session = getSession();
-  if (session) {
-    redirect("/chart");
-  }
-
   return (
     <div className="flex min-h-[60vh] items-center justify-center">
       <div className="glass-panel w-full max-w-md space-y-8 p-8">

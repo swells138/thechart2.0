@@ -1,17 +1,10 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { getSession } from "@/lib/session";
 
 export const metadata = {
   title: "Welcome | The Chart 2.0",
 };
 
 export default function HomePage() {
-  const session = getSession();
-  if (session) {
-    redirect("/chart");
-  }
-
   return (
     <div className="mx-auto max-w-3xl space-y-8 text-center">
       <div className="space-y-4">
@@ -19,8 +12,7 @@ export default function HomePage() {
           Map every relationship with clarity.
         </h1>
         <p className="text-lg text-slate-400">
-          The Chart 2.0 helps you visualize the web of connections in your life with an
-          intuitive, interactive graph. Sign up to start exploring the network.
+          The Chart 2.0 helps you visualize the web of connections in your life with an intuitive, interactive graph. Sign up to start exploring the network.
         </p>
       </div>
       <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
