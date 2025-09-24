@@ -1,11 +1,49 @@
-import Link from "next/link";
-import { findUserByEmail } from "@/lib/auth";
-import { getSession } from "@/lib/session";
-import LogoutButton from "@/components/LogoutButton";
+"use client";
 
-export default async function Header() {
-  const session = getSession();
-  const user = session ? await findUserByEmail(session.email) : null;
+import { useEffect, useState } from "react";
+import Link from "next/link";
+
+import LogoutButton from "@/components/LogoutButton";
+import { supabase } from "@/lib/supabaseClient";
+
+export default function Header() {
+  const [userEmail, setUserEmail] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchUser = async () => {
+      try {
+        const { data, error } = await supabase.auth.getUser();
+        if (error) {
+          console.error("Error fetching current user for header:", error);
+        }
+
+        if (!isMounted) {
+          return;
+        }
+
+        setUserEmail(data?.user?.email ?? null);
+      } catch (error) {
+        console.error("Unexpected error fetching current user for header:", error);
+        if (isMounted) {
+          setUserEmail(null);
+        }
+      }
+    };
+
+    fetchUser();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!isMounted) return;
+      setUserEmail(session?.user?.email ?? null);
+    });
+
+    return () => {
+      isMounted = false;
+      authListener?.subscription?.unsubscribe();
+    };
+  }, []);
 
   return (
     <header className="border-b border-slate-800 bg-slate-950/80 backdrop-blur">
@@ -13,10 +51,18 @@ export default async function Header() {
         <Link href="/" className="text-lg font-semibold tracking-tight text-sky-300">
           The Chart 2.0
         </Link>
-        {user ? (
+        {userEmail ? (
           <div className="flex items-center gap-4 text-sm text-slate-300">
-            <span className="hidden sm:inline">Signed in as {user.username}</span>
-            <LogoutButton />
+            <span className="hidden sm:inline">Signed in as {userEmail}</span>
+            <nav className="flex items-center gap-3">
+              <Link
+                href="/my-chart"
+                className="rounded-lg border border-slate-700 px-3 py-2 transition hover:bg-slate-800/80"
+              >
+                My Chart
+              </Link>
+              <LogoutButton />
+            </nav>
           </div>
         ) : (
           <nav className="flex items-center gap-3 text-sm">
