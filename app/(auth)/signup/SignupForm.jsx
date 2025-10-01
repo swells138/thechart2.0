@@ -13,11 +13,39 @@ export default function SignupForm() {
   const [error, setError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const createBaseNode = async (displayName) => {
+    const safeName = displayName.trim() || "You";
+
+    try {
+      const response = await fetch("/api/nodes", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: safeName,
+          group_type: "self",
+          is_base: true,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        const message = payload?.error ?? "Failed to create your base node.";
+        throw new Error(message);
+      }
+    } catch (baseNodeError) {
+      console.error("Unable to create base node after sign-up:", baseNodeError);
+    }
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError(null);
 
-    if (!username.trim()) {
+    const trimmedUsername = username.trim();
+    if (!trimmedUsername) {
       setError("Please enter a username.");
       return;
     }
@@ -25,17 +53,22 @@ export default function SignupForm() {
     setIsSubmitting(true);
 
     try {
-      const { error: signUpError } = await supabase.auth.signUp({
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: email.trim().toLowerCase(),
         password,
         options: {
-          data: { username: username.trim() },
+          data: { username: trimmedUsername },
         },
       });
 
       if (signUpError) {
         setError(signUpError.message || "Unable to create account. Please try again.");
         return;
+      }
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData?.session?.user?.id || signUpData?.session?.user?.id) {
+        await createBaseNode(trimmedUsername);
       }
 
       router.replace("/my-chart");
