@@ -8,6 +8,79 @@ import { buildChartData, EMPTY_CHART_DATA } from "@/lib/chartData";
 import { supabase } from "@/lib/supabaseClient";
 
 const LOCAL_STORAGE_KEY = "my-chart-data";
+const LOCAL_USER_NODE_ID = "local-user";
+
+function normalizeUserId(value) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function ensureUserNode(data, userId) {
+  const normalizedUserId = normalizeUserId(userId);
+  const desiredId = normalizedUserId ?? LOCAL_USER_NODE_ID;
+  const desiredName = normalizedUserId ? "You" : "Me";
+
+  const nodes = Array.isArray(data?.nodes)
+    ? data.nodes.map((node) => ({ ...node }))
+    : [];
+  const links = Array.isArray(data?.links)
+    ? data.links.map((link) => ({ ...link }))
+    : [];
+
+  let hasUserNode = false;
+
+  for (let index = 0; index < nodes.length; index += 1) {
+    const node = nodes[index];
+    if (!node?.id) {
+      continue;
+    }
+
+    if (normalizedUserId && node.id === LOCAL_USER_NODE_ID) {
+      nodes[index] = {
+        ...node,
+        id: desiredId,
+        name: desiredName,
+        group: "self",
+      };
+      hasUserNode = true;
+      continue;
+    }
+
+    if (node.id === desiredId) {
+      nodes[index] = {
+        ...node,
+        name: node.name ?? desiredName,
+        group: node.group ?? "self",
+      };
+      hasUserNode = true;
+    }
+  }
+
+  if (normalizedUserId) {
+    for (let index = 0; index < links.length; index += 1) {
+      const link = links[index];
+      if (!link) continue;
+
+      if (link.source === LOCAL_USER_NODE_ID) {
+        links[index] = { ...link, source: desiredId };
+      }
+
+      if (link.target === LOCAL_USER_NODE_ID) {
+        links[index] = { ...links[index], target: desiredId };
+      }
+    }
+  }
+
+  if (!hasUserNode) {
+    nodes.push({ id: desiredId, name: desiredName, group: "self" });
+  }
+
+  return { nodes, links };
+}
 
 function generateLocalNodeId() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -134,7 +207,14 @@ export default function MyChartPage() {
     const stored = readLocalChartData();
     const hasStoredData = stored.nodes.length > 0 || stored.links.length > 0;
 
-    setChartData(hasStoredData ? stored : EMPTY_CHART_DATA);
+    const withUserNode = ensureUserNode(
+      hasStoredData ? stored : EMPTY_CHART_DATA,
+      currentUserId,
+    );
+    setChartData(withUserNode);
+    if (hasStoredData) {
+      persistChartDataLocally(withUserNode);
+    }
     setStatus({
       loading: false,
       error: hasStoredData ? null : "We couldn’t load your chart right now. Please try again.",
@@ -147,7 +227,7 @@ export default function MyChartPage() {
     );
 
     return hasStoredData;
-  }, []);
+  }, [currentUserId]);
 
   const loadChartForUser = useCallback(
     async (userId) => {
@@ -180,7 +260,10 @@ export default function MyChartPage() {
           return true;
         }
 
-        const nextData = buildChartData(nodeRows ?? [], linkRows ?? []);
+        const nextData = ensureUserNode(
+          buildChartData(nodeRows ?? [], linkRows ?? []),
+          userId,
+        );
         setChartData(nextData);
         setStatus({ loading: false, error: null });
         setIsUsingLocalData(false);
@@ -304,15 +387,25 @@ export default function MyChartPage() {
         return;
       }
 
+      const userNodeId = normalizeUserId(currentUserId) ?? LOCAL_USER_NODE_ID;
+
       setChartData((prev) => {
+        const base = ensureUserNode(prev, currentUserId);
         const newNode = {
           id: generateLocalNodeId(),
           name: trimmedName,
           group: formValues.group,
         };
         const updated = {
-          nodes: [...prev.nodes, newNode],
-          links: prev.links,
+          nodes: [...base.nodes, newNode],
+          links: [
+            ...base.links,
+            {
+              source: userNodeId,
+              target: newNode.id,
+              type: "friend",
+            },
+          ],
         };
 
         persistChartDataLocally(updated);

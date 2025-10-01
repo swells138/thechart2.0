@@ -9,6 +9,7 @@ const groupColors = {
   dating: "#c084fc",
   family: "#facc15",
   colleague: "#22d3ee",
+  self: "#fde68a",
 };
 
 function getGroupColor(group) {
