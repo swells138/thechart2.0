@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+import { createSupabaseRouteClient } from "@/lib/supabaseRouteClient";
 
 export async function GET() {
-  const supabase = createRouteHandlerClient({ cookies });
+  let supabase;
+  try {
+    supabase = createSupabaseRouteClient();
+  } catch (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
   const {
     data: { user },
     error: userError,
