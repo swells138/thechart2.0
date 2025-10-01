@@ -10,7 +10,7 @@ export async function POST(request) {
 
   let supabase;
   try {
-    supabase = createSupabaseRouteClient();
+    supabase = await createSupabaseRouteClient();
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

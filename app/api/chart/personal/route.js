@@ -4,7 +4,7 @@ import { createSupabaseRouteClient } from "@/lib/supabaseRouteClient";
 export async function GET() {
   let supabase;
   try {
-    supabase = createSupabaseRouteClient();
+    supabase = await createSupabaseRouteClient();
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
