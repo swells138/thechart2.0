@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@supabase/auth-helpers-nextjs": "file:packages/auth-helpers-nextjs",
     "@supabase/supabase-js": "^2.45.4",
     "next": "15.5.4",
     "react": "19.1.0",

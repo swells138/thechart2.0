@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 
 import ChartClient from "./ChartClient";
 import fallbackChart from "@/data/chart.json";
-import { supabase } from "@/lib/supabaseClient";
 import { buildChartData, EMPTY_CHART_DATA } from "@/lib/chartData";
 
 export default function ChartPage() {
@@ -17,35 +16,25 @@ export default function ChartPage() {
 
     async function loadData() {
       try {
-        const [
-          { data: nodeRows, error: nodeError },
-          { data: linkRows, error: linkError },
-        ] = await Promise.all([
-          supabase.from("nodes").select("*").is("user_id", null),
-          supabase.from("links").select("*").is("user_id", null),
-        ]);
+        const response = await fetch("/api/chart/public", { cache: "no-store" });
+        const payload = await response.json().catch(() => null);
 
-        if (nodeError) {
-          console.error("Error fetching public nodes from Supabase:", nodeError);
-        }
-
-        if (linkError) {
-          console.error("Error fetching public links from Supabase:", linkError);
-        }
-
-        if (nodeError || linkError) {
-          throw nodeError ?? linkError;
+        if (!response.ok) {
+          const errorMessage = payload?.error ?? "Failed to load the public chart.";
+          throw new Error(errorMessage);
         }
 
         if (!isActive) {
           return;
         }
 
-        setChartData(buildChartData(nodeRows ?? [], linkRows ?? []));
+        setChartData(
+          buildChartData(payload?.nodes ?? [], payload?.links ?? []),
+        );
         setIsUsingFallback(false);
         setFallbackMessage("");
       } catch (error) {
-        console.error("Unexpected error fetching public chart data from Supabase:", error);
+        console.error("Unexpected error fetching public chart data:", error);
         if (isActive) {
           setChartData(buildChartData(fallbackChart.nodes, fallbackChart.links));
           setIsUsingFallback(true);
