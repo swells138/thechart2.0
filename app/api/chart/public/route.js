@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createSupabaseRouteClient } from "@/lib/supabaseRouteClient";
+import { createSupabaseReadOnlyClient } from "@/lib/supabaseReadOnlyClient";
 import { createSupabaseServiceClient } from "@/lib/supabaseServiceClient";
 
 export const dynamic = "force-dynamic";
@@ -10,10 +10,10 @@ export async function GET() {
     supabase = createSupabaseServiceClient();
   } catch (serviceClientError) {
     try {
-      supabase = await createSupabaseRouteClient();
-    } catch (routeClientError) {
+      supabase = createSupabaseReadOnlyClient();
+    } catch (readOnlyClientError) {
       const error =
-        serviceClientError instanceof Error ? serviceClientError : routeClientError;
+        serviceClientError instanceof Error ? serviceClientError : readOnlyClientError;
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
   }
