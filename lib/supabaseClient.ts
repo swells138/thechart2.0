@@ -2,7 +2,13 @@ import { createBrowserClient } from "@supabase/auth-helpers-nextjs";
 
 import { getSupabaseAnonKey, getSupabaseUrl } from "./supabaseConfig";
 
-const supabaseUrl = getSupabaseUrl();
-const supabaseAnonKey = getSupabaseAnonKey();
+let browserSupabase: ReturnType<typeof createBrowserClient> | undefined;
 
-export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey);
+if (typeof window !== "undefined") {
+  const supabaseUrl = getSupabaseUrl();
+  const supabaseAnonKey = getSupabaseAnonKey();
+
+  browserSupabase = createBrowserClient(supabaseUrl, supabaseAnonKey);
+}
+
+export const supabase = browserSupabase;
