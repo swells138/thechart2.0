@@ -6,6 +6,9 @@ import ChartClient from "./ChartClient";
 import fallbackChart from "@/data/chart.json";
 import { buildChartData, EMPTY_CHART_DATA } from "@/lib/chartData";
 
+const DEFAULT_FALLBACK_MESSAGE =
+  "Showing cached sample data while we reconnect to the live chart.";
+
 export default function ChartPage() {
   const [chartData, setChartData] = useState(EMPTY_CHART_DATA);
   const [isUsingFallback, setIsUsingFallback] = useState(false);
@@ -28,19 +31,26 @@ export default function ChartPage() {
           return;
         }
 
-        setChartData(
-          buildChartData(payload?.nodes ?? [], payload?.links ?? []),
-        );
-        setIsUsingFallback(false);
-        setFallbackMessage("");
+        if (!payload || typeof payload !== "object") {
+          throw new Error("Invalid response payload received for public chart.");
+        }
+
+        const nextData = buildChartData(payload?.nodes ?? [], payload?.links ?? []);
+        const fallbackInfo = payload?.fallback;
+        const usingFallback = fallbackInfo?.isFallback === true;
+        const nextFallbackMessage = usingFallback
+          ? fallbackInfo?.message ?? DEFAULT_FALLBACK_MESSAGE
+          : "";
+
+        setChartData(nextData);
+        setIsUsingFallback(usingFallback);
+        setFallbackMessage(nextFallbackMessage);
       } catch (error) {
         console.error("Unexpected error fetching public chart data:", error);
         if (isActive) {
           setChartData(buildChartData(fallbackChart.nodes, fallbackChart.links));
           setIsUsingFallback(true);
-          setFallbackMessage(
-            "Showing cached sample data while we reconnect to the live chart."
-          );
+          setFallbackMessage(DEFAULT_FALLBACK_MESSAGE);
         }
       }
     }

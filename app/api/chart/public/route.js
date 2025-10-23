@@ -1,6 +1,24 @@
 import { NextResponse } from "next/server";
 import { createSupabaseReadOnlyClient } from "@/lib/supabaseReadOnlyClient";
 import { createSupabaseServiceClient } from "@/lib/supabaseServiceClient";
+import fallbackChart from "@/data/chart.json";
+
+const FALLBACK_MESSAGE =
+  "Showing cached sample data while we reconnect to the live chart.";
+
+function createFallbackResponse(message, status = 200) {
+  return NextResponse.json(
+    {
+      nodes: fallbackChart.nodes,
+      links: fallbackChart.links,
+      fallback: {
+        isFallback: true,
+        message: message ?? FALLBACK_MESSAGE,
+      },
+    },
+    { status },
+  );
+}
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +32,8 @@ export async function GET() {
     } catch (readOnlyClientError) {
       const error =
         serviceClientError instanceof Error ? serviceClientError : readOnlyClientError;
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error("Unable to create Supabase client for public chart:", error);
+      return createFallbackResponse(error.message);
     }
   }
 
@@ -30,12 +49,21 @@ export async function GET() {
   ]);
 
   if (nodesError) {
-    return NextResponse.json({ error: nodesError.message }, { status: 500 });
+    console.error("Unable to load public chart nodes:", nodesError);
+    return createFallbackResponse(nodesError.message);
   }
 
   if (linksError) {
-    return NextResponse.json({ error: linksError.message }, { status: 500 });
+    console.error("Unable to load public chart links:", linksError);
+    return createFallbackResponse(linksError.message);
   }
 
-  return NextResponse.json({ nodes: nodes ?? [], links: links ?? [] });
+  return NextResponse.json({
+    nodes: nodes ?? [],
+    links: links ?? [],
+    fallback: {
+      isFallback: false,
+      message: null,
+    },
+  });
 }
