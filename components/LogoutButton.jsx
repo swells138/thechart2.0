@@ -15,6 +15,10 @@ export default function LogoutButton() {
     setIsSigningOut(true);
 
     try {
+      if (!supabase) {
+        throw new Error("Supabase client is not configured");
+      }
+
       const { error } = await supabase.auth.signOut();
       if (error) {
         console.error("Error while signing out:", error);
@@ -25,7 +29,9 @@ export default function LogoutButton() {
       router.replace("/login");
     } catch (error) {
       console.error("Unexpected error while signing out:", error);
-      setErrorMessage("Unable to sign out. Please try again.");
+      setErrorMessage(
+        "Unable to sign out right now. Supabase may not be configured.",
+      );
     } finally {
       setIsSigningOut(false);
     }

@@ -10,6 +10,11 @@ export default function Header() {
   const [userEmail, setUserEmail] = useState(null);
 
   useEffect(() => {
+    if (!supabase) {
+      setUserEmail(null);
+      return undefined;
+    }
+
     let isMounted = true;
 
     const fetchUser = async () => {

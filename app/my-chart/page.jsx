@@ -184,6 +184,7 @@ function readLocalChartData() {
 export default function MyChartPage() {
   const router = useRouter();
   const isMountedRef = useRef(true);
+  const supabaseClient = supabase;
   const [currentUserId, setCurrentUserId] = useState(null);
   const [chartData, setChartData] = useState(EMPTY_CHART_DATA);
   const [status, setStatus] = useState({ loading: true, error: null });
@@ -235,6 +236,13 @@ export default function MyChartPage() {
         return false;
       }
 
+      if (!supabaseClient) {
+        console.warn(
+          "Supabase client is not configured. Falling back to offline chart data.",
+        );
+        return loadChartFromLocalStorage();
+      }
+
       setStatus({ loading: true, error: null });
 
       try {
@@ -242,8 +250,8 @@ export default function MyChartPage() {
           { data: nodeRows, error: nodeError },
           { data: linkRows, error: linkError },
         ] = await Promise.all([
-          supabase.from("nodes").select("*").eq("user_id", userId),
-          supabase.from("links").select("*").eq("user_id", userId),
+          supabaseClient.from("nodes").select("*").eq("user_id", userId),
+          supabaseClient.from("links").select("*").eq("user_id", userId),
         ]);
 
         if (nodeError || linkError) {
@@ -284,13 +292,29 @@ export default function MyChartPage() {
         return hasStoredData;
       }
     },
-    [loadChartFromLocalStorage]
+    [loadChartFromLocalStorage, supabaseClient]
   );
 
   useEffect(() => {
     const initialize = async () => {
+      if (!supabaseClient) {
+        const hasStoredData = loadChartFromLocalStorage();
+        setIsUsingLocalData(true);
+        setFallbackNotice(
+          "You're working offline. We'll sync your changes once Supabase is configured.",
+        );
+        if (!hasStoredData) {
+          setStatus({
+            loading: false,
+            error:
+              "Supabase is not configured. Add data locally and it will sync once Supabase is available.",
+          });
+        }
+        return;
+      }
+
       try {
-        const { data, error } = await supabase.auth.getUser();
+        const { data, error } = await supabaseClient.auth.getUser();
         if (error) {
           console.error("Error fetching the current user from Supabase:", error);
         }
@@ -322,28 +346,39 @@ export default function MyChartPage() {
 
     initialize();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (!isMountedRef.current) return;
+    if (!supabaseClient) {
+      return undefined;
+    }
 
-      const authUser = session?.user ?? null;
-      if (!authUser) {
-        const hasStoredData = loadChartFromLocalStorage();
-        if (!hasStoredData) {
-          setChartData(EMPTY_CHART_DATA);
-          setStatus({ loading: true, error: null });
-          router.replace("/login");
+    const { data: authListener } = supabaseClient.auth.onAuthStateChange(
+      async (_event, session) => {
+        if (!isMountedRef.current) return;
+
+        const authUser = session?.user ?? null;
+        if (!authUser) {
+          const hasStoredData = loadChartFromLocalStorage();
+          if (!hasStoredData) {
+            setChartData(EMPTY_CHART_DATA);
+            setStatus({ loading: true, error: null });
+            router.replace("/login");
+          }
+          return;
         }
-        return;
-      }
 
-      setCurrentUserId(authUser.id);
-      await loadChartForUser(authUser.id);
-    });
+        setCurrentUserId(authUser.id);
+        await loadChartForUser(authUser.id);
+      },
+    );
 
     return () => {
       authListener?.subscription?.unsubscribe();
     };
-  }, [loadChartForUser, loadChartFromLocalStorage, router]);
+  }, [
+    loadChartForUser,
+    loadChartFromLocalStorage,
+    router,
+    supabaseClient,
+  ]);
 
   const handleInputChange = (event) => {
     const { name, value } = event.target;
@@ -424,12 +459,12 @@ export default function MyChartPage() {
     };
 
     try {
-      if (isUsingLocalData) {
+      if (isUsingLocalData || !supabaseClient) {
         addLocally();
         return;
       }
 
-      const { data: privateNode, error: privateNodeError } = await supabase
+      const { data: privateNode, error: privateNodeError } = await supabaseClient
         .from("nodes")
         .insert([
           {
@@ -445,7 +480,7 @@ export default function MyChartPage() {
         throw privateNodeError;
       }
 
-      const { error: publicNodeError } = await supabase.from("nodes").insert([
+      const { error: publicNodeError } = await supabaseClient.from("nodes").insert([
         {
           name: trimmedName,
           group_type: formValues.group,
@@ -461,7 +496,7 @@ export default function MyChartPage() {
         throw new Error("Private node was not created successfully");
       }
 
-      const { error: linkError } = await supabase.from("links").insert([
+      const { error: linkError } = await supabaseClient.from("links").insert([
         {
           source: currentUserId,
           target: privateNode.id,

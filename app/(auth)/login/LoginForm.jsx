@@ -18,6 +18,10 @@ export default function LoginForm() {
     setIsSubmitting(true);
 
     try {
+      if (!supabase) {
+        throw new Error("Supabase client is not configured");
+      }
+
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: email.trim().toLowerCase(),
         password,
@@ -31,7 +35,9 @@ export default function LoginForm() {
       router.replace("/my-chart");
     } catch (caughtError) {
       console.error("Unexpected error while signing in:", caughtError);
-      setError("Something went wrong. Please try again.");
+      setError(
+        "Unable to log in right now. Supabase may not be configured.",
+      );
     } finally {
       setIsSubmitting(false);
     }
