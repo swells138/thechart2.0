@@ -53,6 +53,10 @@ export default function SignupForm() {
     setIsSubmitting(true);
 
     try {
+      if (!supabase) {
+        throw new Error("Supabase client is not configured");
+      }
+
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: email.trim().toLowerCase(),
         password,
@@ -74,7 +78,9 @@ export default function SignupForm() {
       router.replace("/my-chart");
     } catch (caughtError) {
       console.error("Unexpected error while signing up:", caughtError);
-      setError("Something went wrong. Please try again.");
+      setError(
+        "Unable to create an account right now. Supabase may not be configured.",
+      );
     } finally {
       setIsSubmitting(false);
     }
